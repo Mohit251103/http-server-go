@@ -28,6 +28,9 @@ func checkUpperCase(str string) bool {
 
 func parseRequestLine(req string) (*RequestLine, error) {
 	req_line := strings.Split(req, "\r\n")[0]
+	if req_line == "" {
+		return nil, nil
+	}
 	parts := strings.Split(req_line, " ")
 
 	if len(parts) != 3 {
