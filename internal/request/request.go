@@ -1,13 +1,22 @@
 package request
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 )
 
+type Status int
+
+const (
+	INITIALIZED Status = iota
+	DONE
+)
+
 type Request struct {
-	RequestLine RequestLine
+	RequestLine  RequestLine
+	ParserStatus Status
 }
 
 type RequestLine struct {
@@ -26,42 +35,54 @@ func checkUpperCase(str string) bool {
 	return true
 }
 
-func parseRequestLine(req string) (*RequestLine, error) {
+func parseRequestLine(req string) (*RequestLine, int, error) {
 	req_line := strings.Split(req, "\r\n")[0]
 	if req_line == "" {
-		return nil, nil
+		return nil, 0, nil
 	}
 	parts := strings.Split(req_line, " ")
 
 	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid request line")
+		return nil, 0, fmt.Errorf("invalid request line")
 	}
 
 	method, target, protocol_version := parts[0], parts[1], parts[2]
 
 	if !checkUpperCase(method) {
-		return nil, fmt.Errorf("method in request line should be uppercase")
+		return nil, 0, fmt.Errorf("method in request line should be uppercase")
 	}
 
 	version := strings.Split(protocol_version, "/")[1]
 	if version != "1.1" {
-		return nil, fmt.Errorf("%s: incorrect protocol version. 1.1 supported", version)
+		return nil, 0, fmt.Errorf("%s: incorrect protocol version. 1.1 supported", version)
 	}
 
 	res := RequestLine{HttpVersion: version, RequestTarget: target, Method: method}
-	return &res, nil
+	return &res, len(req_line), nil
+}
+
+func (r *Request) parse(data []byte) (int, error) {
+	r.ParserStatus = INITIALIZED
+
+	requestLine, parsedBytes, err2 := parseRequestLine(string(data))
+	if err2 != nil {
+		return 0, errors.Join(fmt.Errorf("some error occured while parsing line: "), err2)
+	}
+
+	r.RequestLine = *requestLine
+	return parsedBytes, nil
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
-	req, err := io.ReadAll(reader)
-	if err != nil {
-		panic(err.Error())
-	}
 
-	requestLine, err2 := parseRequestLine(string(req))
-	if err2 != nil {
-		return nil, err2
+	request := Request{}
+	buff := make([]byte, 1024)
+	for {
+		req, err := io.ReadAtLeast(reader, buff, 8)
+		if err != nil {
+			return nil, err
+		}
+
 	}
-	request := Request{RequestLine: *requestLine}
 	return &request, nil
 }
