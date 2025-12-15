@@ -3,6 +3,7 @@ package request
 import (
 	"errors"
 	"fmt"
+	"http-server/internal/headers"
 	"io"
 	"strings"
 )
@@ -18,7 +19,7 @@ const (
 type Request struct {
 	RequestLine  RequestLine
 	ParserStatus Status
-	Headers      Headers
+	Headers      headers.Headers
 }
 
 type RequestLine struct {
@@ -59,10 +60,20 @@ func parseRequestLine(req string) (*RequestLine, int, error) {
 	}
 
 	res := RequestLine{HttpVersion: "1.1", RequestTarget: target, Method: method}
-	return &res, len(req_line), nil
+	return &res, len(req_line + "\r\n"), nil
 }
 
 func (r *Request) parse(data []byte) (int, error) {
+	if r.ParserStatus == requestStateParsingHeaders {
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+		if done {
+			r.ParserStatus = DONE
+		}
+		return n, nil
+	}
 
 	requestLine, parsedBytes, err2 := parseRequestLine(string(data))
 	if err2 != nil {
@@ -73,21 +84,30 @@ func (r *Request) parse(data []byte) (int, error) {
 		return 0, nil
 	}
 
-	r.ParserStatus = DONE
 	if requestLine != nil {
 		r.RequestLine = *requestLine
 	}
+
+	if r.ParserStatus == INITIALIZED {
+		r.ParserStatus = requestStateParsingHeaders
+		return parsedBytes, nil
+	}
+
 	return parsedBytes, nil
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 
-	request := Request{}
+	request := Request{ParserStatus: INITIALIZED, Headers: headers.NewHeaders()}
 	buff := make([]byte, 1024)
 	bufLen := 0
 	for request.ParserStatus != DONE {
 		n, err := reader.Read(buff[bufLen:])
 		if err != nil {
+			if err == io.EOF {
+				request.ParserStatus = DONE
+				break
+			}
 			return nil, err
 		}
 
