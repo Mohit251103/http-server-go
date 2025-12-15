@@ -7,16 +7,18 @@ import (
 	"strings"
 )
 
-type Status int
+type Status string
 
 const (
-	INITIALIZED Status = iota
-	DONE
+	INITIALIZED                Status = "init"
+	DONE                       Status = "Done"
+	requestStateParsingHeaders        = "Parsing Headers"
 )
 
 type Request struct {
 	RequestLine  RequestLine
 	ParserStatus Status
+	Headers      Headers
 }
 
 type RequestLine struct {
