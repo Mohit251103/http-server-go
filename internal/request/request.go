@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"http-server/internal/headers"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -14,12 +15,14 @@ const (
 	INITIALIZED                Status = "init"
 	DONE                       Status = "Done"
 	requestStateParsingHeaders        = "Parsing Headers"
+	requestStateParsingBody           = "Parsing Body"
 )
 
 type Request struct {
 	RequestLine  RequestLine
 	ParserStatus Status
 	Headers      headers.Headers
+	Body         []byte
 }
 
 type RequestLine struct {
@@ -69,10 +72,28 @@ func (r *Request) parse(data []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		if done {
+		if done && r.Headers["content-length"] == "" {
+			r.ParserStatus = DONE
+		} else if done {
+			r.ParserStatus = requestStateParsingBody
+			return n + len("\r\n"), nil
+		}
+
+		return n, nil
+	} else if r.ParserStatus == requestStateParsingBody {
+		given_len, err := strconv.Atoi(r.Headers["content-length"])
+		if err != nil {
+			return 0, nil
+		}
+		if given_len < len(string(data)) {
+			return 0, fmt.Errorf("body length is not reported correctly")
+		}
+
+		if given_len == len(data) {
+			r.Body = data
 			r.ParserStatus = DONE
 		}
-		return n, nil
+		return 0, nil
 	}
 
 	requestLine, parsedBytes, err2 := parseRequestLine(string(data))
@@ -102,14 +123,14 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	buff := make([]byte, 1024)
 	bufLen := 0
 	for request.ParserStatus != DONE {
-		n, err := reader.Read(buff[bufLen:])
-		if err != nil {
-			if err == io.EOF {
-				request.ParserStatus = DONE
-				break
-			}
-			return nil, err
-		}
+		n, _ := reader.Read(buff[bufLen:])
+		// if err != nil {
+		// 	// if err == io.EOF {
+		// 	// 	request.ParserStatus = DONE
+		// 	// 	break
+		// 	// }
+		// 	return nil, err
+		// }
 
 		bufLen += n
 		readBytes, err2 := request.parse(buff[:bufLen])
