@@ -2,7 +2,7 @@ package server
 
 import (
 	"fmt"
-	"http-server/internal/request"
+	"io"
 	"net"
 )
 
@@ -29,18 +29,24 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func (s *Server) handle(conn net.Conn) {
-	request, err2 := request.RequestFromReader(conn)
-	if err2 != nil {
-		return
-	}
+func (s *Server) handle(conn io.WriteCloser) {
+	out := []byte("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello World!")
+	conn.Write(out)
+	conn.Close()
+	// request, err2 := request.RequestFromReader(conn)
+	// if err2 != nil {
+	// 	return
+	// }
 
-	fmt.Printf("Request line: \n- Method: %s\n- Target: %s\n- Version: %s\n", request.RequestLine.Method, request.RequestLine.RequestTarget, request.RequestLine.HttpVersion)
-	fmt.Printf("Header: ")
-	for key, value := range request.Headers {
-		fmt.Printf("- %s: %s\n", key, value)
-	}
-	fmt.Printf("Body:\n%s", request.Body)
+	// fmt.Printf("Request line: \n- Method: %s\n- Target: %s\n- Version: %s\n", request.RequestLine.Method, request.RequestLine.RequestTarget, request.RequestLine.HttpVersion)
+	// fmt.Printf("Header: ")
+	// for key, value := range request.Headers {
+	// 	if key == "content-length" {
+	// 		continue
+	// 	}
+	// 	fmt.Printf("- %s: %s\n", key, value)
+	// }
+	// fmt.Printf("Body:\n%s", request.Body)
 }
 
 func (s *Server) Listen() {
