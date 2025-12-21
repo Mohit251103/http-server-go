@@ -3,11 +3,12 @@ package server
 import (
 	"fmt"
 	"http-server/internal/request"
+	"http-server/internal/response"
 	"io"
 )
 
 type HandlerError struct {
-	StatusCode int
+	StatusCode response.StatusCode
 	Message    string
 }
 

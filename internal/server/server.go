@@ -7,7 +7,6 @@ import (
 	"http-server/internal/response"
 	"io"
 	"net"
-	"strconv"
 )
 
 type Server struct {
@@ -35,43 +34,38 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) handle(conn io.ReadWriteCloser) {
+	defer conn.Close()
 	// parsing request
+	headers := response.GetDefaultHeaders(0)
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		fmt.Println("Error", err)
+		hErr := &HandlerError{
+			StatusCode: response.StatusBadRequest,
+			Message:    err.Error(),
+		}
+		WriteHandlerError(conn, hErr)
+		return
 	}
 
 	// parsing response
-	res := bytes.NewBuffer(make([]byte, 1024))
-
+	res := bytes.NewBuffer([]byte{})
+	var body []byte = nil
+	statusCode := response.StatusOk
 	herr := s.handler(res, req)
 	if herr != nil {
-		_ = WriteHandlerError(res, herr)
+		statusCode = herr.StatusCode
+		body = []byte(herr.Message)
 	} else {
-		err := response.WriteStatusLine(res, 200)
-		if err != nil {
-			fmt.Println("Error: ", err)
-		}
-		contentLength, err := strconv.Atoi(req.Headers["content-length"])
-		if err != nil {
-			contentLength = 0
-		}
-		headers := response.GetDefaultHeaders(contentLength)
-		err = response.WriteHeaders(res, headers)
-		if err != nil {
-			fmt.Println("Error: ", err)
-		}
+		body = res.Bytes()
 	}
 
-	fmt.Println(string(res.Bytes()))
-	// if err != nil {
-	// 	fmt.Println("Error writing response to connection:", err)
-	// }
-
-	err = conn.Close()
-	if err != nil {
-		fmt.Println("Error closing connection:", err)
-	}
+	headers["Content-Length"] = fmt.Sprintf("%d", len(body))
+	response.WriteStatusLine(conn, statusCode)
+	response.WriteHeaders(conn, headers)
+	conn.Write(body)
+	// out := []byte("HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\nHello world!")
+	// conn.Write(out)
+	// conn.Close()
 }
 
 func (s *Server) Listen() {
